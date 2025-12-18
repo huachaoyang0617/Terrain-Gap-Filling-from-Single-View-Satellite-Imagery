@@ -15,6 +15,46 @@ In summary, inpainting plays a crucial role in addressing missing data in DEMs, 
 
 
 ## Method
+### Network Architecture Details
+
+This document provides a detailed breakdown of the **pix2pix** architecture used in this repository. The model is a Conditional Generative Adversarial Network (cGAN) designed to learn a mapping from input images $x$ to output images $y$.
+
+#### 1. Generator ($G$): U-Net-256
+
+The generator's goal is to translate the input image (e.g., a sketch) into a realistic output image (e.g., a photo). We utilize a **U-Net** architecture with skip connections to preserve low-level structural information.
+
+##### Architecture Design
+Unlike a standard Encoder-Decoder which bottlenecks information, the U-Net adds **skip connections** between layer $i$ and layer $n-i$.
+*   **Input Resolution:** $256 \times 256 \times 3$
+*   **Skip Connections:** Concatenate channels from the encoder layer $i$ with the decoder layer $n-i$.
+*   **Dropout:** Applied to the first few layers of the decoder (even at test time) to introduce stochasticity.
+
+##### Layer Specification
+Let `Ck` denote a block of **Convolution-BatchNorm-ReLU** with `k` filters.
+Let `CDk` denote a block of **Convolution-BatchNorm-Dropout-ReLU** with `k` filters.
+
+**Encoder Stack:**
+1.  **C64** (4x4 conv, stride 2, LeakyReLU 0.2) *[No BatchNorm in the first layer]*
+2.  **C128** (4x4 conv, stride 2, LeakyReLU 0.2)
+3.  **C256** (4x4 conv, stride 2, LeakyReLU 0.2)
+4.  **C512** (4x4 conv, stride 2, LeakyReLU 0.2)
+5.  **C512** (4x4 conv, stride 2, LeakyReLU 0.2)
+6.  **C512** (4x4 conv, stride 2, LeakyReLU 0.2)
+7.  **C512** (4x4 conv, stride 2, LeakyReLU 0.2)
+8.  **C512** (4x4 conv, stride 2, LeakyReLU 0.2) *[Bottleneck]*
+
+**Decoder Stack (with Skip Connections):**
+1.  **CD512** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 7
+2.  **CD512** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 6
+3.  **CD512** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 5
+4.  **C512** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 4
+5.  **C256** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 3
+6.  **C128** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 2
+7.  **C64** (4x4 transposed conv, stride 2, ReLU) + Concat with Encoder layer 1
+8.  **Output Layer**: 4x4 transposed conv, stride 2, **Tanh** Activation $\to$ Output Image ($256 \times 256 \times 3$)
+
+---
+
 ### Differentiable renderer based on mountain shadow priors
 
 The shadow-constrained terrain gap-filling framework renders the DEM using a differentiable renderer to obtain a shadow mask corresponding to the generated terrain, which is then employed to constrain model training. This section presents the process of generating shadow masks with a differentiable renderer.
